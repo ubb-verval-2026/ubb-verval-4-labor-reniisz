@@ -211,6 +211,59 @@ public class PersonPageTests
        fieldValidationMessage.Text.Should().Contain("-10");
     }
 
+    [Test]
+    public void Person_SalaryIncrease_Minus10_ShouldNotUpdateSalary()
+    {
+        driver.Navigate().GoToUrl(BaseURL);
+        driver.FindElement(By.XPath("//*[@data-test='PersonPageNavigation']")).Click();
+
+        var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
+
+        var initialSalaryLabel = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
+        var initialSalary = double.Parse(initialSalaryLabel.Text);
+
+        wait.Until(driver =>
+        {
+            try
+            {
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys("-10");
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        Thread.Sleep(500);
+
+        var salaryLabelAfterSubmit = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
+        var salaryAfterSubmit = double.Parse(salaryLabelAfterSubmit.Text);
+
+        salaryAfterSubmit.Should().Be(initialSalary);
+    }
+
     private bool IsElementPresent(By by)
     {
         try

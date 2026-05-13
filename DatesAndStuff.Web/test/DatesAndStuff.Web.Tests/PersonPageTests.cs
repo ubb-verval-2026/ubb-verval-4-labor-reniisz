@@ -151,6 +151,66 @@ public class PersonPageTests
         // ellenorizzuk h az ertek megfelelo-e
         salaryAfterSubmission.Should().BeApproximately(expectedSalary, 0.001);
     }
+
+    [Test]
+    public void Person_SalaryIncrease_LessThanMinus10_ShouldShowValidationMessages()
+    {
+        // Arrange
+        driver.Navigate().GoToUrl(BaseURL);
+        driver.FindElement(By.XPath("//*[@data-test='PersonPageNavigation']")).Click();
+
+        var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
+
+        // ervenytelen ertek megadasa
+        wait.Until(driver =>
+        {
+            try
+            {
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys("-11");
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        // Act
+        //submit gomb megnyomasa
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        // Assert
+        //hibauzenetek megkeresese
+        var validationSummary = wait.Until(ExpectedConditions.ElementExists(
+            By.CssSelector(".validation-errors")
+        ));
+
+        var fieldValidationMessage = wait.Until(ExpectedConditions.ElementExists(
+            By.CssSelector(".validation-message")
+        ));
+
+       //ellen. h megjelennek a hibauzenetek
+       validationSummary.Text.Should().NotBeNullOrWhiteSpace();
+       fieldValidationMessage.Text.Should().NotBeNullOrWhiteSpace();
+
+       //ellen. h a -10 szabalyhoz kapcsolodnak
+       validationSummary.Text.Should().Contain("-10");
+       fieldValidationMessage.Text.Should().Contain("-10");
+    }
+
     private bool IsElementPresent(By by)
     {
         try

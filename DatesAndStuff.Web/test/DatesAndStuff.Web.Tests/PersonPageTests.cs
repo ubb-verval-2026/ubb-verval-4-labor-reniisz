@@ -34,7 +34,7 @@ public class PersonPageTests
         {
             FileName = "dotnet",
             //Arguments = $"run --project \"{webProjectPath}\"",
-            Arguments = "dotnet run --no-build",
+            Arguments = "run --no-build",
             WorkingDirectory = webProjFolderPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -97,28 +97,59 @@ public class PersonPageTests
         Assert.That(verificationErrors.ToString(), Is.EqualTo(""));
     }
 
-    [Test]
-    public void Person_SalaryIncrease_ShouldIncrease()
+    [TestCase("5", 5250)]
+    [TestCase("50", 7500)]
+    // fizetesemeles szazaleka, elvart uj fizetes
+    public void Person_SalaryIncrease_ShouldIncrease(string percentage, double expectedSalary)
     {
-        // Arrange
         driver.Navigate().GoToUrl(BaseURL);
         driver.FindElement(By.XPath("//*[@data-test='PersonPageNavigation']")).Click();
 
         var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
 
-        var input = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']")));
-        input.Clear();
-        input.SendKeys("5");
+        //megprobaljuk megkeresni a szazalek input mezot, majd kitolteni a megadott ertekkel
+        wait.Until(driver =>
+        {
+            try
+            {
+                //input mezo megkeresese
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys(percentage);
+                return true;
+            }
+            // ha blazer ujrarendereli az oldalt akkor ujraprobaljuk
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
 
-        // Act
-        var submitButton = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")));
-        submitButton.Click();
+        //megprobalok submit gombra kattintani
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            // ha az elem idokozben ujrageneralodott, akkor ujraprobaljuk
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
 
+        Thread.Sleep(500);
 
-        // Assert
-        var salaryLabel = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='DisplayedSalary']")));
+        // megkeressuk a fizetest megjelenito elemet
+        var salaryLabel = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
         var salaryAfterSubmission = double.Parse(salaryLabel.Text);
-        salaryAfterSubmission.Should().BeApproximately(5250, 0.001);
+        // ellenorizzuk h az ertek megfelelo-e
+        salaryAfterSubmission.Should().BeApproximately(expectedSalary, 0.001);
     }
     private bool IsElementPresent(By by)
     {

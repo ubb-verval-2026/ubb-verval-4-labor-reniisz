@@ -34,7 +34,7 @@ public class PersonPageTests
         {
             FileName = "dotnet",
             //Arguments = $"run --project \"{webProjectPath}\"",
-            Arguments = "dotnet run --no-build",
+            Arguments = "run --no-build",
             WorkingDirectory = webProjFolderPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -97,8 +97,63 @@ public class PersonPageTests
         Assert.That(verificationErrors.ToString(), Is.EqualTo(""));
     }
 
+    [TestCase("5", 5250)]
+    [TestCase("50", 7500)]
+    // fizetesemeles szazaleka, elvart uj fizetes
+    public void Person_SalaryIncrease_ShouldIncrease(string percentage, double expectedSalary)
+    {
+        driver.Navigate().GoToUrl(BaseURL);
+        driver.FindElement(By.XPath("//*[@data-test='PersonPageNavigation']")).Click();
+
+        var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
+
+        //megprobaljuk megkeresni a szazalek input mezot, majd kitolteni a megadott ertekkel
+        wait.Until(driver =>
+        {
+            try
+            {
+                //input mezo megkeresese
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys(percentage);
+                return true;
+            }
+            // ha blazer ujrarendereli az oldalt akkor ujraprobaljuk
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        //megprobalok submit gombra kattintani
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            // ha az elem idokozben ujrageneralodott, akkor ujraprobaljuk
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        Thread.Sleep(500);
+
+        // megkeressuk a fizetest megjelenito elemet
+        var salaryLabel = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
+        var salaryAfterSubmission = double.Parse(salaryLabel.Text);
+        // ellenorizzuk h az ertek megfelelo-e
+        salaryAfterSubmission.Should().BeApproximately(expectedSalary, 0.001);
+    }
+
     [Test]
-    public void Person_SalaryIncrease_ShouldIncrease()
+    public void Person_SalaryIncrease_LessThanMinus10_ShouldShowValidationMessages()
     {
         // Arrange
         driver.Navigate().GoToUrl(BaseURL);
@@ -106,20 +161,109 @@ public class PersonPageTests
 
         var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
 
-        var input = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']")));
-        input.Clear();
-        input.SendKeys("5");
+        // ervenytelen ertek megadasa
+        wait.Until(driver =>
+        {
+            try
+            {
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys("-11");
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
 
         // Act
-        var submitButton = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")));
-        submitButton.Click();
-
+        //submit gomb megnyomasa
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
 
         // Assert
-        var salaryLabel = wait.Until(ExpectedConditions.ElementExists(By.XPath("//*[@data-test='DisplayedSalary']")));
-        var salaryAfterSubmission = double.Parse(salaryLabel.Text);
-        salaryAfterSubmission.Should().BeApproximately(5250, 0.001);
+        //hibauzenetek megkeresese
+        var validationSummary = wait.Until(ExpectedConditions.ElementExists(
+            By.CssSelector(".validation-errors")
+        ));
+
+        var fieldValidationMessage = wait.Until(ExpectedConditions.ElementExists(
+            By.CssSelector(".validation-message")
+        ));
+
+       //ellen. h megjelennek a hibauzenetek
+       validationSummary.Text.Should().NotBeNullOrWhiteSpace();
+       fieldValidationMessage.Text.Should().NotBeNullOrWhiteSpace();
+
+       //ellen. h a -10 szabalyhoz kapcsolodnak
+       validationSummary.Text.Should().Contain("-10");
+       fieldValidationMessage.Text.Should().Contain("-10");
     }
+
+    [Test]
+    public void Person_SalaryIncrease_Minus10_ShouldNotUpdateSalary()
+    {
+        driver.Navigate().GoToUrl(BaseURL);
+        driver.FindElement(By.XPath("//*[@data-test='PersonPageNavigation']")).Click();
+
+        var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(5));
+
+        var initialSalaryLabel = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
+        var initialSalary = double.Parse(initialSalaryLabel.Text);
+
+        wait.Until(driver =>
+        {
+            try
+            {
+                var input = driver.FindElement(By.XPath("//*[@data-test='SalaryIncreasePercentageInput']"));
+                input.Clear();
+                input.SendKeys("-10");
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        wait.Until(driver =>
+        {
+            try
+            {
+                driver.FindElement(By.XPath("//*[@data-test='SalaryIncreaseSubmitButton']")).Click();
+                return true;
+            }
+            catch (StaleElementReferenceException)
+            {
+                return false;
+            }
+        });
+
+        Thread.Sleep(500);
+
+        var salaryLabelAfterSubmit = wait.Until(ExpectedConditions.ElementExists(
+            By.XPath("//*[@data-test='DisplayedSalary']")
+        ));
+
+        var salaryAfterSubmit = double.Parse(salaryLabelAfterSubmit.Text);
+
+        salaryAfterSubmit.Should().Be(initialSalary);
+    }
+
     private bool IsElementPresent(By by)
     {
         try
